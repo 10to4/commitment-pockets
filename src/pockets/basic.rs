@@ -1,6 +1,6 @@
 
 
-// KZG10
+// KZG10 - PolyCommit_DL
 use super::PocketError;
 use super::{UnaryPolynomial, multiexp};
 use ark_std::{ops::Mul, ops::Sub, vec, Zero, One};

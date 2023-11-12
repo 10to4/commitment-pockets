@@ -1,6 +1,6 @@
 # Commitment pockets
 
-A library building at #zkhackIstanbul.
+ Just a toy.
 
 ## Goal
 
@@ -35,3 +35,4 @@ So if we can concombine strcut those commitment schemes to a libaray, it will be
 ## License
 
 
+(The idea comes from the #zkhackIstanbul, but it is not submmitted finally)
