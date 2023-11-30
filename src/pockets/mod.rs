@@ -6,18 +6,21 @@ use error::PocketError;
 mod basic;
 pub use basic::{BasicParameters, BasicPolyCommit, BasicProof};
 
+mod basic_ped;
+pub use basic_ped::{BasicPEDParameters, BasicPEDPolyCommit, BasicPEDProof};
+
 use ark_ff::Field;
 use ark_ec::{pairing::Pairing};
 use ark_std::{ops::Mul, ops::Add, ops::Sub, vec, Zero, One};
 
 
 #[derive(Clone, PartialEq, Eq, Hash, Default)]
-pub struct UnaryPolynomial<E: Pairing> {
+pub struct UniPolynomial<E: Pairing> {
    
     coeffs: Vec<E::ScalarField>,
 }
 
-impl <E: Pairing> UnaryPolynomial<E> {
+impl <E: Pairing> UniPolynomial<E> {
     pub fn new(coeffs: Vec<E::ScalarField>) -> Self{
         Self { coeffs }
     }
@@ -55,14 +58,14 @@ impl <E: Pairing> UnaryPolynomial<E> {
         sum
     }
 
-    pub fn div(self, div_poly: UnaryPolynomial<E>) -> Result<UnaryPolynomial<E>, PocketError>{
+    pub fn div(self, div_poly: UniPolynomial<E>) -> Result<UniPolynomial<E>, PocketError>{
         if self.is_zero() {
-            Ok(UnaryPolynomial::zero())
+            Ok(UniPolynomial::zero())
         } else if div_poly.is_zero() {
             Err(PocketError::InvalidDivisor)
         } else {
             let mut quotient = vec![E::ScalarField::zero(); self.degree() - div_poly.degree() + 1];
-            let mut remainder: UnaryPolynomial<E> = self.clone();
+            let mut remainder: UniPolynomial<E> = self.clone();
             let divisor_leading_inv = div_poly.deref().last().unwrap().inverse().unwrap();
             
             while !remainder.is_zero() && remainder.degree() >= div_poly.degree() {
@@ -81,7 +84,7 @@ impl <E: Pairing> UnaryPolynomial<E> {
                     remainder.coeffs.pop();
                 }
             }
-            Ok(UnaryPolynomial::new(quotient))
+            Ok(UniPolynomial::new(quotient))
         }
         
     }
