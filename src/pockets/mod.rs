@@ -9,8 +9,11 @@ pub use basic::{BasicParameters, BasicPolyCommit, BasicProof};
 mod basic_ped;
 pub use basic_ped::{BasicPEDParameters, BasicPEDPolyCommit, BasicPEDProof};
 
+mod multiproof;
+pub use multiproof::{MultiProofParameters, MultiProofPolyCommit, MultiProofPolyCommit2, MultiProof};
+
 use ark_ff::Field;
-use ark_ec::{pairing::Pairing};
+use ark_ec::pairing::Pairing;
 use ark_std::{ops::Mul, ops::Add, ops::Sub, vec, Zero, One};
 
 
@@ -34,7 +37,7 @@ impl <E: Pairing> UniPolynomial<E> {
     }
 
     pub fn degree(&self) -> usize {
-        self.coeffs.len()
+        self.coeffs.len() - 1
     } 
 
     pub fn is_zero(&self) -> bool {
@@ -45,7 +48,7 @@ impl <E: Pairing> UniPolynomial<E> {
         Self::new(vec![])
     }
 
-    pub fn evaluate(&self, value: E::ScalarField) -> E::ScalarField{
+    pub fn evaluate(&self, value: &E::ScalarField) -> E::ScalarField{
         if self.is_zero() {
             return E::ScalarField::zero()
         }
@@ -58,7 +61,27 @@ impl <E: Pairing> UniPolynomial<E> {
         sum
     }
 
-    pub fn div(self, div_poly: UniPolynomial<E>) -> Result<UniPolynomial<E>, PocketError>{
+    pub fn mulpoly(&self, multi_poly: &UniPolynomial<E>) -> Result<UniPolynomial<E>, PocketError>{
+        if self.is_zero() {
+            Ok(UniPolynomial::zero())
+        } else if multi_poly.is_zero() {
+            Err(PocketError::InvalidDivisor)
+        } else {
+            let poly_degree = self.degree();
+            let multi_degree = multi_poly.degree();
+            let poly_coeff = self.deref();
+            let multi_coeff = multi_poly.deref();
+            let mut res_coeff = vec![E::ScalarField::zero() ; poly_degree + multi_degree + 1];
+            for i in 0..poly_degree + 1 {
+                for j in 0..multi_degree + 1 {
+                    res_coeff[i+j] = res_coeff[i+j] + poly_coeff[i] * multi_coeff[j];
+                }
+            }
+            Ok(UniPolynomial::new(res_coeff))
+        }
+    }
+
+    pub fn div(&self, div_poly: &UniPolynomial<E>) -> Result<UniPolynomial<E>, PocketError>{
         if self.is_zero() {
             Ok(UniPolynomial::zero())
         } else if div_poly.is_zero() {
@@ -95,6 +118,15 @@ impl <E: Pairing> UniPolynomial<E> {
 pub fn multiexp<E: Pairing>(bases: Vec<E::G1Affine>, exponents: Vec<E::ScalarField>)-> Result<E::G1Affine, PocketError>{
     //TODO: it is a native version, and it will be improved.
     let mut acc = E::G1::zero().into();
+    for (e, b) in exponents.iter().zip(bases.iter()) {
+        acc = acc.add(&b.mul(e)).into();
+    }
+    Ok(acc)
+}
+
+pub fn multiexp2<E: Pairing>(bases: Vec<E::G2Affine>, exponents: Vec<E::ScalarField>)-> Result<E::G2Affine, PocketError>{
+    //TODO: it is a native version, and it will be improved.
+    let mut acc = E::G2::zero().into();
     for (e, b) in exponents.iter().zip(bases.iter()) {
         acc = acc.add(&b.mul(e)).into();
     }

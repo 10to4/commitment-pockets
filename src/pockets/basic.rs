@@ -1,6 +1,10 @@
 
 
 // KZG10 - PolyCommit_DL
+// a single polynomial
+// a single point
+// an univar polynomial
+// no hiding
 use super::PocketError;
 use super::{UniPolynomial, multiexp};
 use ark_std::{ops::Mul, vec, Zero, One};
@@ -37,12 +41,12 @@ impl <E: Pairing> BasicParameters<E> {
         })
     }
 
-    fn degree(&self) -> usize{
-        self.powers_of_g1.len()
+    pub fn degree(&self) -> usize{
+        self.powers_of_g1.len() - 1
     }
 
-    fn g1_vec(&self, len: usize) -> Result<Vec<E::G1Affine>, PocketError>{
-        assert!(self.degree()>=len);
+    pub fn g1_vec(&self, len: usize) -> Result<Vec<E::G1Affine>, PocketError>{
+        assert!(self.degree() >= len - 1);
         Ok(self.powers_of_g1[0..len].to_vec())
     }
 }
@@ -57,7 +61,7 @@ impl <E: Pairing> BasicPolyCommit<E>{
         let param_degree = params.degree();
         assert!(param_degree >= poly_degree);
         
-        let commit = multiexp::<E>(params.g1_vec(poly_degree).unwrap(), poly.deref().to_vec()).unwrap();
+        let commit = multiexp::<E>(params.g1_vec(poly_degree + 1).unwrap(), poly.deref().to_vec()).unwrap();
         Ok(Self { commit })
     }
 
@@ -91,13 +95,13 @@ impl <E: Pairing> BasicProof<E>{
         assert!(param_degree >= poly_degree);
         assert!(poly_degree > 1);
 
-        let value = poly.evaluate(point);
+        let value = poly.evaluate(&point);
 
         let div_poly = UniPolynomial::new(vec![E::ScalarField::zero() - point, E::ScalarField::one()]);
 
-        let res_poly = poly.div(div_poly).unwrap();
+        let res_poly = poly.div(&div_poly).unwrap();
 
-        let w = multiexp::<E>(params.g1_vec(res_poly.degree()).unwrap(), res_poly.deref().to_vec()).unwrap();
+        let w = multiexp::<E>(params.g1_vec(res_poly.degree() + 1).unwrap(), res_poly.deref().to_vec()).unwrap();
         
         Ok(Self{
             w, value

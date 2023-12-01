@@ -1,6 +1,10 @@
 use std::ops::Add;
 
 // KZG10 - PolyCommit_PED
+// a single polynomial
+// a single point
+// an univar polynomial
+// hiding
 use super::PocketError;
 use super::{UniPolynomial, multiexp};
 use ark_std::{ops::Mul, vec, Zero, One};
@@ -51,7 +55,7 @@ impl <E: Pairing> BasicPEDParameters<E> {
 
         assert_eq!(self.powers_of_g.len(), self.powers_of_h.len());
 
-        self.powers_of_g.len()
+        self.powers_of_g.len() - 1
     }
 
     fn g_vec(&self, len: usize) -> Result<Vec<E::G1Affine>, PocketError>{
@@ -78,11 +82,11 @@ impl <E: Pairing> BasicPEDPolyCommit<E>{
         let param_degree = params.degree();
         assert!(param_degree >= poly_degree);
 
-        let coeffs = (0..poly_degree).map(|_| E::ScalarField::rand(rng)).collect();
+        let coeffs = (0..poly_degree + 1).map(|_| E::ScalarField::rand(rng)).collect();
         let phi_poly: UniPolynomial<E> = UniPolynomial::new(coeffs);
 
-        let commit = multiexp::<E>(params.g_vec(poly_degree).unwrap(), poly.deref().to_vec()).unwrap();
-        let phi_commit = multiexp::<E>(params.h_vec(poly_degree).unwrap(), phi_poly.deref().to_vec()).unwrap();
+        let commit = multiexp::<E>(params.g_vec(poly_degree + 1).unwrap(), poly.deref().to_vec()).unwrap();
+        let phi_commit = multiexp::<E>(params.h_vec(poly_degree + 1).unwrap(), phi_poly.deref().to_vec()).unwrap();
         Ok((Self { commit: commit.add(phi_commit).into() }, phi_poly)) 
     }
 
@@ -93,7 +97,7 @@ impl <E: Pairing> BasicPEDPolyCommit<E>{
         assert!(phi_degree == poly_degree);
         assert!(param_degree >= poly_degree);
 
-        let commit = multiexp::<E>(params.g_vec(poly_degree).unwrap(), poly.deref().to_vec()).unwrap().add(multiexp::<E>(params.h_vec(poly_degree).unwrap(), phi_poly.deref().to_vec()).unwrap()).into_affine();
+        let commit = multiexp::<E>(params.g_vec(poly_degree + 1).unwrap(), poly.deref().to_vec()).unwrap().add(multiexp::<E>(params.h_vec(poly_degree + 1).unwrap(), phi_poly.deref().to_vec()).unwrap()).into_affine();
         
         if self.commit.eq(&commit) {
             Ok((poly.clone(), phi_poly.clone()))
@@ -109,7 +113,7 @@ impl <E: Pairing> BasicPEDPolyCommit<E>{
         assert!(phi_degree == poly_degree);
         assert!(param_degree >= poly_degree);
 
-        let commit = multiexp::<E>(params.g_vec(poly_degree).unwrap(), poly.deref().to_vec()).unwrap().add(multiexp::<E>(params.h_vec(poly_degree).unwrap(), phi_poly.deref().to_vec()).unwrap()).into_affine();
+        let commit = multiexp::<E>(params.g_vec(poly_degree + 1).unwrap(), poly.deref().to_vec()).unwrap().add(multiexp::<E>(params.h_vec(poly_degree + 1).unwrap(), phi_poly.deref().to_vec()).unwrap()).into_affine();
         
         self.commit.eq(&commit)
     }
@@ -132,18 +136,18 @@ impl <E: Pairing> BasicPEDProof<E>{
         let param_degree = params.degree();
         assert!(phi_degree == poly_degree);
         assert!(param_degree >= poly_degree);
-        assert!(poly_degree > 1);
+        assert!(poly_degree >= 1);
 
         let div_poly = UniPolynomial::new(vec![E::ScalarField::zero() - point, E::ScalarField::one()]);
         
-        let value = poly.evaluate(point);
-        let res_poly = poly.div(div_poly.clone()).unwrap();
+        let value = poly.evaluate(&point);
+        let res_poly = poly.div(&div_poly).unwrap();
 
-        let phi_value = phi_poly.evaluate(point);
-        let res_phi_poly = phi_poly.div(div_poly).unwrap();
+        let phi_value = phi_poly.evaluate(&point);
+        let res_phi_poly = phi_poly.div(&div_poly).unwrap();
 
-        let w = multiexp::<E>(params.g_vec(res_poly.degree()).unwrap(), res_poly.deref().to_vec()).unwrap();
-        let phi_w = multiexp::<E>(params.h_vec(res_phi_poly.degree()).unwrap(), res_phi_poly.deref().to_vec()).unwrap();
+        let w = multiexp::<E>(params.g_vec(res_poly.degree() + 1).unwrap(), res_poly.deref().to_vec()).unwrap();
+        let phi_w = multiexp::<E>(params.h_vec(res_phi_poly.degree() + 1).unwrap(), res_phi_poly.deref().to_vec()).unwrap();
 
         Ok(Self{
             w: w.add(phi_w).into(), 
