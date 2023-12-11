@@ -1,6 +1,5 @@
-
 #[derive(Debug)]
-pub enum PocketError{
+pub enum PocketError {
     InvalidDivisor,
     ErrorPolynomial,
 }
