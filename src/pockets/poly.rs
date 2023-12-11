@@ -1,10 +1,10 @@
 
 use std::ops::MulAssign;
 
-use ark_ff::{Field, FftField, PrimeField};
+use ark_ff::{Field, PrimeField};
 use ark_ec::pairing::Pairing;
-use ark_std::{ops::Mul, ops::Sub, ops::Add, vec, Zero, One, log2};
-
+use ark_std::{ops::Mul, ops::Sub,  vec, Zero, One, log2};
+use std::cmp::max;
 use super::PocketError;
 
 #[derive(Clone, PartialEq, Eq, Hash, Default)]
@@ -100,33 +100,63 @@ impl <E: Pairing> UniPolynomial<E> {
         }
     }
 
+    pub fn mulvalue(&self, value: E::ScalarField) ->  Result<UniPolynomial<E>, PocketError> {
+        let coeffs = self.coeffs.iter().map(|coeff| coeff.mul(value)).collect();
+        Ok(Self{
+            coeffs
+        })
+    }
+
+    pub fn addpoly(&self, poly: &UniPolynomial<E>)-> Result<UniPolynomial<E>, PocketError>{
+        if self.is_zero() {
+            Ok(UniPolynomial::zero())
+        } else if poly.is_zero() {
+            Err(PocketError::InvalidDivisor)
+        } else {
+            let self_degree = self.degree();
+            let poly_degree = poly.degree();
+            let max_degree = max(self_degree, poly_degree);
+            let self_coeff = self.deref();
+            let poly_coeff = poly.deref();
+
+            let mut res_coeff = vec![E::ScalarField::zero(); max_degree + 1];
+            for i in 0..self_degree + 1 {
+                res_coeff[i] = res_coeff[i] + self_coeff[i];
+            }
+            for j in 0..poly_degree + 1 {
+                res_coeff[j] = res_coeff[j] + poly_coeff[j];
+            }
+            Ok(UniPolynomial::new(res_coeff))
+
+        }
+    }
 }
 
 
-pub struct EvaluationDomain<E: Pairing> {
-    coeffs: Vec<E::ScalarField>,
+pub struct EvaluationDomain<E: PrimeField> {
+    coeffs: Vec<E>,
     exp: u32,
-    omega: E::ScalarField,
-    omegainv: E::ScalarField,
-    geninv: E::ScalarField,
-    minv: E::ScalarField,
+    omega: E,
+    omegainv: E,
+    geninv: E,
+    minv: E,
 }
 
-impl <E: Pairing> EvaluationDomain<E> {
+impl <E: PrimeField> EvaluationDomain<E> {
 
-    pub fn new(coeffs: &Vec<E::ScalarField>) -> Result<Self, PocketError>{
+    pub fn new(coeffs: &Vec<E>) -> Result<Self, PocketError>{
         
-        let mut coeffs: Vec<E::ScalarField> = coeffs.clone();
+        let mut coeffs: Vec<E> = coeffs.clone();
         if !coeffs.len().is_power_of_two() {
             let num_coeffs = coeffs.len().checked_next_power_of_two().unwrap();
-            coeffs.resize(num_coeffs, E::ScalarField::zero());
+            coeffs.resize(num_coeffs, E::zero());
         }
         let len = coeffs.len();
 
         let exp = log2(coeffs.len());
        
-        let mut omega = E::ScalarField::TWO_ADIC_ROOT_OF_UNITY;
-        for _ in exp..E::ScalarField::TWO_ADICITY {
+        let mut omega = E::TWO_ADIC_ROOT_OF_UNITY;
+        for _ in exp..E::TWO_ADICITY {
             omega.square_in_place();
         }
         
@@ -135,13 +165,17 @@ impl <E: Pairing> EvaluationDomain<E> {
             exp,
             omega,
             omegainv: omega.inverse().unwrap(),
-            geninv: E::ScalarField::GENERATOR.inverse().unwrap(),
-            minv: E::ScalarField::from_be_bytes_mod_order(&len.to_be_bytes()).inverse().unwrap(),
+            geninv: E::GENERATOR.inverse().unwrap(),
+            minv: E::from_be_bytes_mod_order(&len.to_be_bytes()).inverse().unwrap(),
         })
     }
 
-    pub fn as_ref(&self) -> &Vec<E::ScalarField> {
+    pub fn as_ref(&self) -> &Vec<E> {
         &self.coeffs
+    }
+
+    pub fn omega(&self) -> E {
+        self.omega
     }
 
     fn init_reverse(&mut self) {
@@ -175,7 +209,7 @@ impl <E: Pairing> EvaluationDomain<E> {
         for _ in 0..log_n {
             let m = omega.pow(&[f as u64]);
             for j in 0..f {
-                let mut w = E::ScalarField::one();
+                let mut w = E::one();
                 for k in 0..t / 2 {
                     let a_add = self.coeffs[j * t + k];
                     let mut a_sub = self.coeffs[j * t + t / 2 + k];
@@ -205,7 +239,7 @@ impl <E: Pairing> EvaluationDomain<E> {
         for _ in 0..log_n {
             let m = omega.pow(&[f as u64]);
             for j in 0..f {
-                let mut w = E::ScalarField::one();
+                let mut w = E::one();
                 for k in 0..t / 2 {
                     let a_add = self.coeffs[j * t + k];
                     let mut a_sub = self.coeffs[j * t + t / 2 + k];
@@ -225,7 +259,7 @@ impl <E: Pairing> EvaluationDomain<E> {
     }
 
     pub fn coset_fft(&mut self) {
-        self.distribute_powers(E::ScalarField::GENERATOR);
+        self.distribute_powers(E::GENERATOR);
         self.fft();
     }
 
@@ -236,7 +270,7 @@ impl <E: Pairing> EvaluationDomain<E> {
         self.distribute_powers(geninv);
     }
 
-    pub fn distribute_powers(&mut self, g: E::ScalarField) {
+    pub fn distribute_powers(&mut self, g: E) {
         let mut u = g.pow(&[(0) as u64]);
 
         self.coeffs  = self.coeffs.iter().map(|coeff|{
@@ -250,7 +284,6 @@ impl <E: Pairing> EvaluationDomain<E> {
 #[cfg(test)]
 mod evaldomain {
     use rand::thread_rng;
-    use ark_bls12_381::Bls12_381;
     use ark_bls12_381::Fr;
     use ark_ff::UniformRand;
     use super::EvaluationDomain;
@@ -260,7 +293,7 @@ mod evaldomain {
         let rng: &mut rand::rngs::ThreadRng = &mut thread_rng();
         let coeffs = vec![Fr::rand(rng), Fr::rand(rng), Fr::rand(rng), Fr::rand(rng), Fr::rand(rng), Fr::rand(rng), Fr::rand(rng), Fr::rand(rng)];
         println!("coeffs = {:?}", coeffs);
-        let mut domain = EvaluationDomain::<Bls12_381>::new(&coeffs).unwrap();
+        let mut domain = EvaluationDomain::<Fr>::new(&coeffs).unwrap();
         domain.fft();
         println!("after fft: values = {:?}", domain.as_ref());
         domain.ifft();

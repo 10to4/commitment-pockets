@@ -7,12 +7,13 @@
 
 use super::PocketError;
 use super::{UniPolynomial, multiexp, multiexp2};
-use ark_std::{ops::Mul, vec, Zero, One};
+use ark_std::{ops::Mul, vec, Zero, One, ops::Neg};
 use ark_std::rand::RngCore;
 use ark_ec::pairing::Pairing;
 use ark_ff::UniformRand;
 use ark_std::vec::Vec;
 
+#[derive(Clone)]
 pub struct MultiProofParameters<E: Pairing>{
     pub powers_of_g1: Vec<E::G1Affine>,
     pub powers_of_g2: Vec<E::G2Affine>,
@@ -70,7 +71,7 @@ impl <E: Pairing> MultiProofPolyCommit<E>{
         let param_degree = params.degree();
         assert!(param_degree >= poly_degree);
         
-        let commit = multiexp::<E>(params.g1_vec(poly_degree + 1).unwrap(), poly.deref().to_vec()).unwrap();
+        let commit = multiexp::<E>(&params.g1_vec(poly_degree + 1).unwrap(), poly.deref().to_vec()).unwrap();
         Ok(Self { commit })
     }
 
@@ -99,7 +100,7 @@ impl <E: Pairing> MultiProofPolyCommit2<E>{
         let param_degree = params.degree();
         assert!(param_degree >= poly_degree);
         
-        let commit = multiexp2::<E>(params.g2_vec(poly_degree + 1).unwrap(), poly.deref().to_vec()).unwrap();
+        let commit = multiexp2::<E>(&params.g2_vec(poly_degree + 1).unwrap(), poly.deref().to_vec()).unwrap();
         Ok(Self { commit })
     }
 }
@@ -121,13 +122,13 @@ impl <E: Pairing> MultiProof<E>{
 
         let mut div_poly = UniPolynomial::new(vec![E::ScalarField::one()]);
         let values = points.iter().map(|point|{
-            let apoly = UniPolynomial::new(vec![E::ScalarField::zero() - point, E::ScalarField::one()]);
+            let apoly = UniPolynomial::new(vec![point.neg(), E::ScalarField::one()]);
             div_poly = div_poly.mulpoly(&apoly).unwrap();
             poly.evaluate(point)
         }).collect();
         let res_poly = poly.div(&div_poly).unwrap();
 
-        let w = multiexp::<E>(params.g1_vec(res_poly.degree() + 1).unwrap(), res_poly.deref().to_vec()).unwrap();
+        let w = multiexp::<E>(&params.g1_vec(res_poly.degree() + 1).unwrap(), res_poly.deref().to_vec()).unwrap();
         
         Ok(Self{
             w,
@@ -143,7 +144,7 @@ impl <E: Pairing> MultiProof<E>{
         }
         let div_commit = MultiProofPolyCommit2::commit(params, &div_poly).unwrap();
 
-        let mut ipoly_coeffs = vec![E::ScalarField::zero(); points.len()+1];
+        let mut ipoly_coeffs = vec![E::ScalarField::zero(); points.len()];
         for (i, &point) in points.iter().enumerate() {
             let coeff = points.iter().enumerate().map(|(j, &apoint)|{
                 if i == j{
