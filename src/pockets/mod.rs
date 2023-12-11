@@ -16,8 +16,8 @@ pub use multiproof::{MultiProofParameters, MultiProofPolyCommit, MultiProofPolyC
 mod asvc;
 pub use asvc::{ASvckey, ASvccommit, ASvcproof};
 
-// mod caulk_single;
-// pub use caulk_single::{CaulkParameters, PedersenProof, CaulkSinglePolyCommit, CaulkSingleProof};
+mod caulk_single;
+pub use caulk_single::{CaulkParameters, PedersenProof, CaulkSinglePolyCommit, CaulkSingleProof};
 
 use ark_ec::pairing::Pairing;
 use ark_std::{ops::Mul, ops::Add, Zero};
