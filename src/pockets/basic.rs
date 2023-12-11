@@ -14,6 +14,7 @@ use ark_ff::UniformRand;
 use ark_ec::AffineRepr;
 use ark_std::vec::Vec;
 
+#[derive(Clone)]
 pub struct BasicParameters<E: Pairing>{
     pub powers_of_g1: Vec<E::G1Affine>,
     pub g2: E::G2Affine,
@@ -61,7 +62,7 @@ impl <E: Pairing> BasicPolyCommit<E>{
         let param_degree = params.degree();
         assert!(param_degree >= poly_degree);
         
-        let commit = multiexp::<E>(params.g1_vec(poly_degree + 1).unwrap(), poly.deref().to_vec()).unwrap();
+        let commit = multiexp::<E>(&params.g1_vec(poly_degree + 1).unwrap(), poly.deref().to_vec()).unwrap();
         Ok(Self { commit })
     }
 
@@ -101,7 +102,7 @@ impl <E: Pairing> BasicProof<E>{
 
         let res_poly = poly.div(&div_poly).unwrap();
 
-        let w = multiexp::<E>(params.g1_vec(res_poly.degree() + 1).unwrap(), res_poly.deref().to_vec()).unwrap();
+        let w = multiexp::<E>(&params.g1_vec(res_poly.degree() + 1).unwrap(), res_poly.deref().to_vec()).unwrap();
         
         Ok(Self{
             w, value

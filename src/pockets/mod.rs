@@ -1,7 +1,8 @@
-use std::ops::MulAssign;
-
 mod error;
 use error::PocketError;
+
+mod poly;
+pub use poly::{UniPolynomial, EvaluationDomain};
 
 mod basic;
 pub use basic::{BasicParameters, BasicPolyCommit, BasicProof};
@@ -12,110 +13,17 @@ pub use basic_ped::{BasicPEDParameters, BasicPEDPolyCommit, BasicPEDProof};
 mod multiproof;
 pub use multiproof::{MultiProofParameters, MultiProofPolyCommit, MultiProofPolyCommit2, MultiProof};
 
-use ark_ff::Field;
+mod asvc;
+pub use asvc::{ASvckey, ASvccommit, ASvcproof};
+
+// mod caulk_single;
+// pub use caulk_single::{CaulkParameters, PedersenProof, CaulkSinglePolyCommit, CaulkSingleProof};
+
 use ark_ec::pairing::Pairing;
-use ark_std::{ops::Mul, ops::Add, ops::Sub, vec, Zero, One};
+use ark_std::{ops::Mul, ops::Add, Zero};
 
 
-#[derive(Clone, PartialEq, Eq, Hash, Default)]
-pub struct UniPolynomial<E: Pairing> {
-   
-    coeffs: Vec<E::ScalarField>,
-}
-
-impl <E: Pairing> UniPolynomial<E> {
-    pub fn new(coeffs: Vec<E::ScalarField>) -> Self{
-        Self { coeffs }
-    }
-
-    pub fn deref(&self) -> &[E::ScalarField] {
-        &self.coeffs
-    }
-
-    pub fn deref_mut(&mut self) -> &mut [E::ScalarField] {
-        &mut self.coeffs
-    }
-
-    pub fn degree(&self) -> usize {
-        self.coeffs.len() - 1
-    } 
-
-    pub fn is_zero(&self) -> bool {
-        self.coeffs.len() == 0
-    }
-
-    pub fn zero() -> Self{
-        Self::new(vec![])
-    }
-
-    pub fn evaluate(&self, value: &E::ScalarField) -> E::ScalarField{
-        if self.is_zero() {
-            return E::ScalarField::zero()
-        }
-        let mut cur = E::ScalarField::one();
-        let mut sum = E::ScalarField::zero();
-        for coeff in self.deref() {
-            sum += cur.mul(coeff);
-            cur.mul_assign(value);
-        }
-        sum
-    }
-
-    pub fn mulpoly(&self, multi_poly: &UniPolynomial<E>) -> Result<UniPolynomial<E>, PocketError>{
-        if self.is_zero() {
-            Ok(UniPolynomial::zero())
-        } else if multi_poly.is_zero() {
-            Err(PocketError::InvalidDivisor)
-        } else {
-            let poly_degree = self.degree();
-            let multi_degree = multi_poly.degree();
-            let poly_coeff = self.deref();
-            let multi_coeff = multi_poly.deref();
-            let mut res_coeff = vec![E::ScalarField::zero() ; poly_degree + multi_degree + 1];
-            for i in 0..poly_degree + 1 {
-                for j in 0..multi_degree + 1 {
-                    res_coeff[i+j] = res_coeff[i+j] + poly_coeff[i] * multi_coeff[j];
-                }
-            }
-            Ok(UniPolynomial::new(res_coeff))
-        }
-    }
-
-    pub fn div(&self, div_poly: &UniPolynomial<E>) -> Result<UniPolynomial<E>, PocketError>{
-        if self.is_zero() {
-            Ok(UniPolynomial::zero())
-        } else if div_poly.is_zero() {
-            Err(PocketError::InvalidDivisor)
-        } else {
-            let mut quotient = vec![E::ScalarField::zero(); self.degree() - div_poly.degree() + 1];
-            let mut remainder: UniPolynomial<E> = self.clone();
-            let divisor_leading_inv = div_poly.deref().last().unwrap().inverse().unwrap();
-            
-            while !remainder.is_zero() && remainder.degree() >= div_poly.degree() {
-                let mut cur_q_coeff = remainder.coeffs.last().unwrap().clone();
-                cur_q_coeff.mul_assign(&divisor_leading_inv);
-                
-                let cur_q_degree = remainder.degree() - div_poly.degree();
-                quotient[cur_q_degree] = cur_q_coeff;
-
-                for (i, div_coeff) in div_poly.coeffs.iter().enumerate() {
-                    let mut cq = cur_q_coeff;
-                    cq.mul_assign(div_coeff);
-                    remainder.coeffs[cur_q_degree + i] = remainder.coeffs[cur_q_degree + i].sub(&cq);
-                }
-                while let Some(true) = remainder.coeffs.last().map(|c| c.is_zero()) {
-                    remainder.coeffs.pop();
-                }
-            }
-            Ok(UniPolynomial::new(quotient))
-        }
-        
-    }
-}
-
-
-
-pub fn multiexp<E: Pairing>(bases: Vec<E::G1Affine>, exponents: Vec<E::ScalarField>)-> Result<E::G1Affine, PocketError>{
+pub fn multiexp<E: Pairing>(bases: &Vec<E::G1Affine>, exponents: Vec<E::ScalarField>)-> Result<E::G1Affine, PocketError>{
     //TODO: it is a native version, and it will be improved.
     let mut acc = E::G1::zero().into();
     for (e, b) in exponents.iter().zip(bases.iter()) {
@@ -124,7 +32,7 @@ pub fn multiexp<E: Pairing>(bases: Vec<E::G1Affine>, exponents: Vec<E::ScalarFie
     Ok(acc)
 }
 
-pub fn multiexp2<E: Pairing>(bases: Vec<E::G2Affine>, exponents: Vec<E::ScalarField>)-> Result<E::G2Affine, PocketError>{
+pub fn multiexp2<E: Pairing>(bases: &Vec<E::G2Affine>, exponents: Vec<E::ScalarField>)-> Result<E::G2Affine, PocketError>{
     //TODO: it is a native version, and it will be improved.
     let mut acc = E::G2::zero().into();
     for (e, b) in exponents.iter().zip(bases.iter()) {
